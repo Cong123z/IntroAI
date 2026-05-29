@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vienna U-Bahn Navigator — Admin</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<header>
+  <span>🚇</span>
+  <h1>Vienna U-Bahn Navigator — Admin</h1>
+  <a href="/">← User view</a>
+</header>
+
+<div class="admin-layout">
+
+  <!-- Disruptions -->
+  <div class="admin-card">
+    <h2>⚠️ Disruptions</h2>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:.75rem">
+      Close a station, a line, or a segment. Routes will automatically reroute.
+    </p>
+
+    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+      <div style="flex:1">
+        <label for="sel-type">Closure type</label>
+        <select id="sel-type">
+          <option value="station">Station</option>
+          <option value="line">Line</option>
+          <option value="segment">Segment</option>
+        </select>
+      </div>
+      <div style="flex:2">
+        <label for="sel-target">Target</label>
+        <select id="sel-target"><option value="">Loading…</option></select>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button id="btn-add" class="btn btn-primary">Add Closure</button>
+      <button id="btn-clear-all" class="btn btn-danger">Clear All</button>
+    </div>
+
+    <ul id="scenario-list" style="margin-top:.75rem"></ul>
+  </div>
+
+  <!-- Weather -->
+  <div class="admin-card">
+    <h2>🌦️ Weather Condition</h2>
+    <p style="font-size:.85rem;color:var(--muted)">
+      Current conditions affect pedestrian walking speed across all routes.
+    </p>
+
+    <div class="weather-btn-group">
+      <button class="weather-btn" data-condition="clear">☀️ Clear</button>
+      <button class="weather-btn" data-condition="rain">🌧️ Rain</button>
+      <button class="weather-btn" data-condition="snow">❄️ Snow</button>
+    </div>
+    <p id="weather-speed-label" class="weather-speed-info"></p>
+  </div>
+
+</div>
+
+<script src="/js/admin.js"></script>
+</body>
+</html>
