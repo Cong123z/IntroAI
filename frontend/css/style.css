@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -175,10 +176,91 @@ label {
   font-size: 0.82rem;
   font-weight: 750;
   margin-bottom: 0.35rem;
+=======
+/* Vienna U-Bahn Navigator — styles */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #f4f5f7;
+  --sidebar: #ffffff;
+  --accent:  #0057a8;
+  --danger:  #c0392b;
+  --text:    #222;
+  --muted:   #666;
+  --border:  #ddd;
+  --radius:  8px;
+  --shadow:  0 2px 8px rgba(0,0,0,.12);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+header {
+  background: var(--accent);
+  color: #fff;
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+}
+header h1 { font-size: 1.1rem; font-weight: 600; }
+header a { color: rgba(255,255,255,.75); font-size: 0.85rem; margin-left: auto; text-decoration: none; }
+header a:hover { color: #fff; }
+
+/* ── Main layout ── */
+.layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 300px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sidebar-section {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-section h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+/* ── Form controls ── */
+label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+>>>>>>> 33fef28fcd96a502602419035e6fb92420c7e279
 }
 
 select {
   width: 100%;
+<<<<<<< HEAD
   min-height: 42px;
   padding: 0.55rem 2.25rem 0.55rem 0.7rem;
   border: 1px solid var(--border);
@@ -322,10 +404,69 @@ button:focus-visible,
   font-size: 0.94rem;
   font-weight: 750;
   line-height: 1.35;
+=======
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 0.6rem center;
+  cursor: pointer;
+}
+select:focus { outline: 2px solid var(--accent); }
+
+.pick-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Buttons ── */
+button, .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.45rem 0.9rem;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn-primary   { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #004a8f; }
+.btn-secondary { background: #e9ecef; color: var(--text); }
+.btn-secondary:hover { background: #dde0e4; }
+.btn-danger    { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #a53125; }
+.btn-ghost     { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-ghost:hover { background: #f0f0f0; }
+.btn-ghost.active { background: #ddeeff; border-color: var(--accent); color: var(--accent); }
+
+.btn-full { width: 100%; }
+
+.action-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* ── Result ── */
+#result-banner {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.5rem 0;
+  color: var(--text);
+>>>>>>> 33fef28fcd96a502602419035e6fb92420c7e279
 }
 
 #result-steps {
   list-style: none;
+<<<<<<< HEAD
   display: grid;
   gap: 0.5rem;
   margin-top: 0.35rem;
@@ -640,3 +781,113 @@ button:focus-visible,
   background: #f0f0f0;
   color: var(--muted);
 }
+=======
+  margin-top: 0.5rem;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-left: 4px solid var(--border);
+  margin-bottom: 0.3rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: #fafafa;
+  font-size: 0.83rem;
+}
+.step-walk   { border-left-color: #666; }
+.step-ride   { border-left-color: var(--accent); }
+.step-enter, .step-exit { border-left-color: #999; }
+.step-transfer { border-left-color: #e67e22; }
+
+.step-icon  { font-size: 1rem; flex-shrink: 0; }
+.step-desc  { flex: 1; color: var(--text); line-height: 1.35; }
+.step-dur   { color: var(--muted); white-space: nowrap; font-size: 0.78rem; }
+
+/* ── Map ── */
+#map {
+  flex: 1;
+}
+
+/* ── Admin page ── */
+.admin-layout {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.admin-card {
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow);
+}
+.admin-card h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#scenario-list { list-style: none; margin: 0.75rem 0; }
+.scenario-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.35rem;
+  font-size: 0.88rem;
+}
+.scenario-item button {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 0.2rem;
+}
+.empty { color: var(--muted); font-size: 0.88rem; }
+
+/* ── Weather ── */
+.weather-btn-group {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.weather-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: #f8f8f8;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+.weather-btn:hover { background: #f0f0f0; }
+.weather-btn.active {
+  border-color: var(--accent);
+  background: #ddeeff;
+  font-weight: bold;
+}
+
+.weather-speed-info {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+  .layout  { flex-direction: column; }
+  #map     { height: 55vh; }
+}
+>>>>>>> 33fef28fcd96a502602419035e6fb92420c7e279
