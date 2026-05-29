@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "backend" / "data"
 router   = APIRouter(prefix="/api", tags=["network"])
@@ -52,3 +52,19 @@ def get_network():
         })
 
     return {"stations": list(stations_map.values()), "segments": segments}
+
+
+@router.get("/network/walk-bounds")
+def get_walk_bounds():
+    walk_nodes = json.loads((DATA_DIR / "walk_nodes.json").read_text())
+    if not walk_nodes:
+        raise HTTPException(status_code=404, detail="No walk nodes found")
+
+    lats = [node["lat"] for node in walk_nodes]
+    lngs = [node["lng"] for node in walk_nodes]
+    return {
+        "min_lat": min(lats),
+        "max_lat": max(lats),
+        "min_lng": min(lngs),
+        "max_lng": max(lngs),
+    }

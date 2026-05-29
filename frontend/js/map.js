@@ -8,8 +8,8 @@ let networkStations = [];
 let startMarker = null;
 let endMarker   = null;
 
-let networkVisible = true;    // subway lines toggle state
-let walkBoundsVisible = true; // walk node bbox toggle state
+let networkVisible = false;    // subway lines toggle state
+let walkBoundsVisible = false; // walk node bbox toggle state
 
 let pickMode = null;   // 'start' | 'end' | null
 
@@ -132,6 +132,9 @@ async function toggleWalkBounds() {
   // Fetch bounds from backend
   try {
     const res  = await fetch(`${API_BASE}/api/network/walk-bounds`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
     const data = await res.json();
     const { min_lat, max_lat, min_lng, max_lng } = data;
 
@@ -195,31 +198,25 @@ function setPickMode(mode) {
   updatePickButtons(mode);
 }
 
-function drawRoute(steps) {
+function drawRoute(steps, coords) {
   if (routeLayer) map.removeLayer(routeLayer);
   routeLayer = L.layerGroup().addTo(map);
 
-  const bounds = [];
-  const visitedStations = findVisitedStations(steps);
+  if (!coords || coords.length < 2) return;
 
-  for (const step of steps) {
-    if (!step.polyline || step.polyline.length < 2) continue;
+  const bounds = [...coords];
+  const visitedStations = findVisitedStations(steps, coords);
 
-    bounds.push(...step.polyline);
-
-    if (step.kind === 'walk') {
-      L.polyline(step.polyline, {
-        color: WALK_COLOR, weight: 6, opacity: 1, dashArray: '6 8', lineCap: 'round',
-      }).addTo(routeLayer);
-    } else {
-      L.polyline(step.polyline, {
-        color: LINE_COLORS[step.line_id] || ROUTE_COLOR,
-        weight: 7,
-        opacity: 1,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(routeLayer);
+  const hasStepGeometry = steps.some(step => step.coords && step.coords.length >= 2);
+  if (hasStepGeometry) {
+    for (const step of steps) {
+      drawRouteStep(step);
     }
+  } else {
+    L.polyline(coords, {
+      color: ROUTE_COLOR, weight: 6, opacity: 0.9,
+      lineCap: 'round', lineJoin: 'round',
+    }).addTo(routeLayer);
   }
 
   drawVisitedStations(visitedStations);
@@ -229,18 +226,52 @@ function drawRoute(steps) {
   }
 }
 
-function findVisitedStations(steps) {
-  const visited = new Map();
-  const ridePoints = steps
-    .filter(step => step.kind === 'ride' && step.polyline)
-    .flatMap(step => step.polyline.map(point => ({ point, lineId: step.line_id })));
+function drawRouteStep(step) {
+  const stepCoords = step.coords || [];
+  if (stepCoords.length < 2) return;
 
-  for (const { point, lineId } of ridePoints) {
-    const station = findStationAt(point, lineId);
-    if (!station) continue;
-    const key = `${station.name}|${station.lat.toFixed(6)}|${station.lng.toFixed(6)}`;
-    if (!visited.has(key)) {
-      visited.set(key, { ...station, routeLineId: lineId });
+  if (step.kind === 'ride') {
+    L.polyline(stepCoords, {
+      color: LINE_COLORS[step.line_id] || ROUTE_COLOR,
+      weight: 7, opacity: 1,
+      lineCap: 'round', lineJoin: 'round',
+    }).addTo(routeLayer);
+    return;
+  }
+
+  if (step.kind === 'walk' || step.kind === 'enter' || step.kind === 'exit') {
+    L.polyline(stepCoords, {
+      color: WALK_COLOR, weight: 6, opacity: 1,
+      dashArray: '6 8', lineCap: 'round',
+    }).addTo(routeLayer);
+    return;
+  }
+
+  if (step.kind === 'transfer') {
+    L.polyline(stepCoords, {
+      color: WALK_COLOR, weight: 4, opacity: 0.85,
+      dashArray: '2 8', lineCap: 'round',
+    }).addTo(routeLayer);
+  }
+}
+
+function findVisitedStations(steps, coords) {
+  const visited = new Map();
+
+  const rideSteps = steps.filter(s => s.kind === 'ride');
+  if (rideSteps.length === 0) return [];
+
+  for (const step of rideSteps) {
+    const lineId = step.line_id;
+    if (!lineId) continue;
+    const candidates = step.coords && step.coords.length ? step.coords : coords;
+    for (const point of candidates) {
+      const station = findStationAt(point, lineId);
+      if (!station) continue;
+      const key = `${station.name}|${station.lat.toFixed(6)}|${station.lng.toFixed(6)}`;
+      if (!visited.has(key)) {
+        visited.set(key, { ...station, routeLineId: lineId });
+      }
     }
   }
 

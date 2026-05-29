@@ -82,6 +82,7 @@ class PathStep:
     duration_s: float
     distance_m: float = 0.0
     line_id: str | None = None
+    coords: list[tuple[float, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -478,6 +479,9 @@ class PathfindingService:
                 total += haversine_m(a[0], a[1], b[0], b[1])
             return total
 
+        def segment_coords(start: int, stop: int) -> list[tuple[float, float]]:
+            return [self._coord(idx, overlay) for idx in path_idx[start : stop + 1]]
+
         steps: list[PathStep] = []
         i = 0
         while i < len(path_edges):
@@ -494,7 +498,13 @@ class PathfindingService:
                     j += 1
                 dist = segment_distance(i, j)
                 steps.append(
-                    PathStep(kind="walk", description="Walk", duration_s=dur, distance_m=dist)
+                    PathStep(
+                        kind="walk",
+                        description="Walk",
+                        duration_s=dur,
+                        distance_m=dist,
+                        coords=segment_coords(i, j),
+                    )
                 )
                 i = j
                 continue
@@ -508,6 +518,7 @@ class PathfindingService:
                             duration_s=edge.weight * correction, # Nhân hệ số
                             distance_m=segment_distance(i, i + 1),
                             line_id=to_node.line_id,
+                            coords=segment_coords(i, i + 1),
                         )
                     )
                 else:
@@ -518,6 +529,7 @@ class PathfindingService:
                             description=f"Exit metro at {name} to street",
                             duration_s=edge.weight * correction, # Nhân hệ số
                             distance_m=segment_distance(i, i + 1),
+                            coords=segment_coords(i, i + 1),
                         )
                     )
                 i += 1
@@ -545,6 +557,7 @@ class PathfindingService:
                         duration_s=dur,
                         distance_m=segment_distance(i, j),
                         line_id=edge.line_id,
+                        coords=segment_coords(i, j),
                     )
                 )
                 i = j
@@ -560,6 +573,7 @@ class PathfindingService:
                         duration_s=edge.weight,
                         distance_m=0.0,
                         line_id=line_to,
+                        coords=segment_coords(i, i + 1),
                     )
                 )
                 i += 1

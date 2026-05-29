@@ -20,13 +20,13 @@ async function findRoute() {
   const end   = window._endPoint;
 
   if (!start || !end) {
-    alert('Please set both a start and end point.');
+    alert('Hãy chọn điểm đi và điểm đến hợp lệ');
     return;
   }
 
   const banner = document.getElementById('result-banner');
   const steps  = document.getElementById('result-steps');
-  banner.textContent = '⏳ Finding route…';
+  banner.textContent = 'Đang tìm đường…';
   steps.innerHTML    = '';
 
   try {
@@ -43,17 +43,17 @@ async function findRoute() {
 
     if (!res.ok) {
       const err = await res.json();
-      banner.textContent = `❌ ${err.detail || 'No route found'}`;
+      banner.textContent = `❌ ${err.detail || 'Không tìm thấy đường'}`;
       return;
     }
 
     const data = await res.json();
 
     // Draw colored polyline on map
-    drawRoute(data.steps);
+    drawRoute(data.steps, data.coords);
 
     // Update banner
-    banner.textContent = `✅ Total: ${formatDuration(data.total_time_s)}`;
+    banner.textContent = `✅ Tổng thời gian: ${formatDuration(data.total_time_s)}`;
 
     // Render step list
     steps.innerHTML = '';
