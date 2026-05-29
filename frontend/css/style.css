@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -176,7 +175,6 @@ label {
   font-size: 0.82rem;
   font-weight: 750;
   margin-bottom: 0.35rem;
-=======
 /* Vienna U-Bahn Navigator — styles */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -255,7 +253,6 @@ label {
   font-weight: 600;
   color: var(--muted);
   margin-bottom: 0.25rem;
->>>>>>> 33fef28fcd96a502602419035e6fb92420c7e279
 }
 
 select {
