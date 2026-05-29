@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PathRequest(BaseModel):
@@ -16,6 +16,7 @@ class PathStepOut(BaseModel):
     duration_s:  float
     distance_m:  float = 0.0
     line_id:     Optional[str] = None
+    coords:      list[list[float]] = Field(default_factory=list)
 
 
 class PathResponse(BaseModel):

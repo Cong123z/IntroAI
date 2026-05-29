@@ -4,10 +4,6 @@ Build the Vienna U-Bahn navigation graph from GTFS + OSM data.
 Outputs 6 JSON files to backend/data/:
   platforms.json, walk_nodes.json, ride_edges.json,
   transfer_edges.json, entrance_edges.json, walk_edges.json
-
-Run after:
-  python scripts/download_gtfs.py
-  python scripts/download_walk_osm.py
 """
 from __future__ import annotations
 
@@ -24,16 +20,17 @@ GTFS_DIR = ROOT / "backend" / "data" / "raw" / "gtfs"
 OSM_FILE = ROOT / "backend" / "data" / "raw" / "walk.osm.json"
 DATA_DIR = ROOT / "backend" / "data"
 
-WALK_SPEED_MPS  = 1.4
-ENTRANCE_K      = 3
-ENTRANCE_R_MAX  = 150.0   # metres
-TRANSFER_TIME_S = 180     # flat 3-min transfer between lines at same station
-EARTH_R         = 6_371_000.0
+WALK_SPEED_MPS  = 1.4          # m/s at baseline
+ENTRANCE_K      = 3            # walk nodes to connect per platform
+ENTRANCE_R_MAX  = 150.0        # metres — max snap distance
+TRANSFER_TIME_S = 180          # flat 3-min transfer between lines at same station
 
+# ─────────────────────────── helpers ────────────────────────────────────────
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+EARTH_R = 6_371_000.0
 
 def haversine(lat1, lng1, lat2, lng2) -> float:
+    """Great-circle distance in metres."""
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlam = math.radians(lng2 - lng1)
@@ -41,12 +38,7 @@ def haversine(lat1, lng1, lat2, lng2) -> float:
     return 2 * EARTH_R * math.asin(math.sqrt(a))
 
 
-def parse_time_s(t: str) -> int:
-    h, m, s = t.split(":")
-    return int(h) * 3600 + int(m) * 60 + int(s)
-
-
-# ── GTFS ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────── GTFS loading ───────────────────────────────────
 
 def load_gtfs():
     routes     = pd.read_csv(GTFS_DIR / "routes.txt",     dtype=str).fillna("")
@@ -54,34 +46,48 @@ def load_gtfs():
     stop_times = pd.read_csv(GTFS_DIR / "stop_times.txt", dtype=str).fillna("")
     stops      = pd.read_csv(GTFS_DIR / "stops.txt",      dtype=str).fillna("")
 
-    subway  = routes[routes["route_type"] == "1"][["route_id", "route_short_name"]]
-    s_trips = trips[trips["route_id"].isin(subway["route_id"])][["trip_id", "route_id"]]
-    s_times = stop_times[stop_times["trip_id"].isin(s_trips["trip_id"])]
+    # Filter subway routes only (route_type == "1")
+    subway_routes = routes[routes["route_type"] == "1"][["route_id", "route_short_name"]]
+    subway_trips  = trips[trips["route_id"].isin(subway_routes["route_id"])][
+        ["trip_id", "route_id", "shape_id"]
+    ]
+    subway_times  = stop_times[stop_times["trip_id"].isin(subway_trips["trip_id"])]
 
+    # Join everything
     merged = (
-        s_times
-        .merge(s_trips, on="trip_id")
-        .merge(subway, on="route_id")
+        subway_times
+        .merge(subway_trips, on="trip_id")
+        .merge(subway_routes, on="route_id")
         .merge(stops[["stop_id", "stop_name", "stop_lat", "stop_lon"]], on="stop_id")
     )
-    merged["stop_lat"]      = merged["stop_lat"].astype(float)
-    merged["stop_lon"]      = merged["stop_lon"].astype(float)
+    merged["stop_lat"] = merged["stop_lat"].astype(float)
+    merged["stop_lon"] = merged["stop_lon"].astype(float)
     merged["stop_sequence"] = merged["stop_sequence"].astype(int)
     return merged
 
 
-# ── platforms ────────────────────────────────────────────────────────────────
+def parse_time_s(t: str) -> int:
+    """HH:MM:SS → seconds (handles hours ≥24 for overnight trips)."""
+    h, m, s = t.split(":")
+    return int(h) * 3600 + int(m) * 60 + int(s)
 
-def build_platforms(merged):
-    seen: dict[tuple[str, str], int] = {}
-    platforms: list[dict] = []
-    pid = 1
+
+# ─────────────────────────── platform building ──────────────────────────────
+
+def build_platforms(merged: pd.DataFrame):
+    """
+    One platform per (stop_id, line) pair.
+    Returns list of dicts: {id, station_id, station_name, line_id, lat, lng}
+    """
+    seen  : dict[tuple[str, str], int] = {}
+    plats : list[dict] = []
+    pid = 0
 
     for _, row in merged.drop_duplicates(["stop_id", "route_short_name"]).iterrows():
         key = (row["stop_id"], row["route_short_name"])
         if key not in seen:
             seen[key] = pid
-            platforms.append({
+            plats.append({
                 "id":           pid,
                 "station_id":   row["stop_id"],
                 "station_name": row["stop_name"],
@@ -91,47 +97,58 @@ def build_platforms(merged):
             })
             pid += 1
 
-    return platforms, seen
+    return plats, seen
 
 
-# ── ride edges ───────────────────────────────────────────────────────────────
+# ─────────────────────────── ride edges ─────────────────────────────────────
 
-def build_ride_edges(merged, seen):
+def build_ride_edges(merged: pd.DataFrame, seen: dict[tuple[str, str], int]):
+    """
+    For each trip, consecutive stops → ride edge with travel_time_s.
+    Uses median departure times across all trips on the same (from, to, line).
+    """
     by_trip: dict[str, list] = defaultdict(list)
     for _, row in merged.iterrows():
         by_trip[row["trip_id"]].append(row)
 
     accum: dict[tuple[int, int, str], list[int]] = defaultdict(list)
+
     for rows in by_trip.values():
-        rows_s = sorted(rows, key=lambda r: r["stop_sequence"])
-        line   = rows_s[0]["route_short_name"]
-        for a, b in zip(rows_s, rows_s[1:]):
-            ka = (a["stop_id"], line)
-            kb = (b["stop_id"], line)
-            if ka not in seen or kb not in seen:
+        rows_sorted = sorted(rows, key=lambda r: r["stop_sequence"])
+        line = rows_sorted[0]["route_short_name"]
+        for a, b in zip(rows_sorted, rows_sorted[1:]):
+            key_a = (a["stop_id"], line)
+            key_b = (b["stop_id"], line)
+            if key_a not in seen or key_b not in seen:
                 continue
+            pid_a = seen[key_a]
+            pid_b = seen[key_b]
+
             try:
                 dt = parse_time_s(b["departure_time"]) - parse_time_s(a["departure_time"])
             except Exception:
                 continue
-            if dt <= 0 or dt > 600:
-                continue
-            accum[(seen[ka], seen[kb], line)].append(dt)
 
-    return [
-        {
+            if dt <= 0 or dt > 600:   # sanity: 0–10 min
+                continue
+            accum[(pid_a, pid_b, line)].append(dt)
+
+    edges = []
+    for (fp, tp, line), times in accum.items():
+        median_t = int(sorted(times)[len(times) // 2])
+        edges.append({
             "from_platform": fp,
             "to_platform":   tp,
-            "travel_time_s": int(sorted(times)[len(times) // 2]),
+            "travel_time_s": median_t,
             "line_id":       line,
-        }
-        for (fp, tp, line), times in accum.items()
-    ]
+        })
+    return edges
 
 
-# ── transfer edges ────────────────────────────────────────────────────────────
+# ─────────────────────────── transfer edges ─────────────────────────────────
 
-def build_transfer_edges(platforms):
+def build_transfer_edges(platforms: list[dict]):
+    """Flat 3-min transfer between different lines at the same station."""
     by_station: dict[str, list[int]] = defaultdict(list)
     for p in platforms:
         by_station[p["station_id"]].append(p["id"])
@@ -142,30 +159,39 @@ def build_transfer_edges(platforms):
             continue
         for i, a in enumerate(pids):
             for b in pids[i + 1:]:
-                edges.append({"from_platform": a, "to_platform": b, "transfer_time_s": TRANSFER_TIME_S})
-                edges.append({"from_platform": b, "to_platform": a, "transfer_time_s": TRANSFER_TIME_S})
+                edges.append({
+                    "from_platform":  a,
+                    "to_platform":    b,
+                    "transfer_time_s": TRANSFER_TIME_S,
+                })
+                edges.append({
+                    "from_platform":  b,
+                    "to_platform":    a,
+                    "transfer_time_s": TRANSFER_TIME_S,
+                })
     return edges
 
 
-# ── OSM walk graph ────────────────────────────────────────────────────────────
+# ─────────────────────────── OSM walk graph ─────────────────────────────────
 
-def build_walk_graph():
-    raw   = json.loads(OSM_FILE.read_text(encoding="utf-8"))
+def build_walk_graph(osm_path: Path):
+    """Parse Overpass JSON → walk nodes + walk edges."""
+    raw   = json.loads(osm_path.read_text())
     elems = raw.get("elements", [])
 
-    node_by_id: dict[int, tuple[float, float]] = {}
+    node_by_id: dict[int, dict] = {}
     for e in elems:
         if e["type"] == "node" and "lat" in e:
-            node_by_id[e["id"]] = (e["lat"], e["lon"])
+            node_by_id[e["id"]] = {"lat": e["lat"], "lng": e["lon"]}
 
-    # Sequential IDs starting from 1_000_000 to avoid collision with platform IDs
-    osm_to_wid: dict[int, int] = {}
-    wid = 1_000_000
+    # Assign sequential IDs starting from 1_000_000 (to avoid collision with platform IDs)
+    osm_to_idx: dict[int, int] = {}
     walk_nodes: list[dict] = []
-    for osm_id, (lat, lng) in node_by_id.items():
-        osm_to_wid[osm_id] = wid
-        walk_nodes.append({"id": wid, "lat": lat, "lng": lng})
-        wid += 1
+    idx = 1_000_000
+    for osm_id, coord in node_by_id.items():
+        osm_to_idx[osm_id] = idx
+        walk_nodes.append({"id": idx, "lat": coord["lat"], "lng": coord["lng"]})
+        idx += 1
 
     walk_edges: list[dict] = []
     for e in elems:
@@ -173,31 +199,33 @@ def build_walk_graph():
             continue
         ns = e.get("nodes", [])
         for a_osm, b_osm in zip(ns, ns[1:]):
-            if a_osm not in osm_to_wid or b_osm not in osm_to_wid:
+            if a_osm not in osm_to_idx or b_osm not in osm_to_idx:
                 continue
-            a_coord = node_by_id[a_osm]
-            b_coord = node_by_id[b_osm]
-            dist = haversine(a_coord[0], a_coord[1], b_coord[0], b_coord[1])
-            t    = dist / WALK_SPEED_MPS
-            wa   = osm_to_wid[a_osm]
-            wb   = osm_to_wid[b_osm]
-            walk_edges.append({"from_node": wa, "to_node": wb, "travel_time_s": t})
-            walk_edges.append({"from_node": wb, "to_node": wa, "travel_time_s": t})
+            a_node = node_by_id[a_osm]
+            b_node = node_by_id[b_osm]
+            dist   = haversine(a_node["lat"], a_node["lng"], b_node["lat"], b_node["lng"])
+            t      = dist / WALK_SPEED_MPS
+            a_idx  = osm_to_idx[a_osm]
+            b_idx  = osm_to_idx[b_osm]
+            walk_edges.append({"from_node": a_idx, "to_node": b_idx, "travel_time_s": t})
+            walk_edges.append({"from_node": b_idx, "to_node": a_idx, "travel_time_s": t})
 
-    return walk_nodes, walk_edges
+    return walk_nodes, walk_edges, osm_to_idx
 
 
-# ── entrance edges ────────────────────────────────────────────────────────────
+# ─────────────────────────── entrance edges ─────────────────────────────────
 
 def build_entrance_edges(platforms, walk_nodes):
+    """Connect each platform to the K nearest walk nodes within ENTRANCE_R_MAX."""
     if not walk_nodes:
         return []
 
-    coords = [(n["lat"], n["lng"]) for n in walk_nodes]
-    wids   = [n["id"] for n in walk_nodes]
-    tree   = KDTree(coords)
+    coords  = [(n["lat"], n["lng"]) for n in walk_nodes]
+    ids     = [n["id"] for n in walk_nodes]
+    tree    = KDTree(coords)
 
-    r_deg = ENTRANCE_R_MAX / 111_000  # approximate degree radius
+    # approximate: 1 degree lat ≈ 111 km → convert metres to degrees for radius
+    r_deg = ENTRANCE_R_MAX / 111_000
 
     edges = []
     for p in platforms:
@@ -206,33 +234,39 @@ def build_entrance_edges(platforms, walk_nodes):
             k=min(ENTRANCE_K, len(walk_nodes)),
             distance_upper_bound=r_deg,
         )
-        if not hasattr(dists, "__iter__"):
-            dists, idxs = [dists], [idxs]
-        for dist_deg, ki in zip(dists, idxs):
-            if ki >= len(wids):
+        for dist_deg, wid in zip(
+            (dists if hasattr(dists, "__iter__") else [dists]),
+            (idxs  if hasattr(idxs,  "__iter__") else [idxs]),
+        ):
+            if wid >= len(ids):
                 continue
-            wlat, wlng = coords[ki]
-            real_dist = haversine(p["lat"], p["lng"], wlat, wlng)
+            walk_node_id = ids[wid]
+            # Real distance in metres
+            wn = walk_nodes[wid]
+            real_dist = haversine(p["lat"], p["lng"], wn["lat"], wn["lng"])
             if real_dist > ENTRANCE_R_MAX:
                 continue
             t = real_dist / WALK_SPEED_MPS
-            edges.append({"platform_id": p["id"], "walk_node_id": wids[ki], "travel_time_s": t})
-
+            edges.append({
+                "platform_id":  p["id"],
+                "walk_node_id": walk_node_id,
+                "travel_time_s": t,
+            })
     return edges
 
 
-# ── main ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────── main ────────────────────────────────────────────
 
 def main():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     print("Loading GTFS …")
     merged = load_gtfs()
-    print(f"  {len(merged):,} stop-time rows, {merged['route_short_name'].nunique()} lines")
+    print(f"  {len(merged):,} stop-time rows across {merged['route_short_name'].nunique()} lines")
 
     print("Building platforms …")
     platforms, seen = build_platforms(merged)
-    print(f"  {len(platforms)} platforms")
+    print(f"  {len(platforms)} platform nodes")
 
     print("Building ride edges …")
     ride_edges = build_ride_edges(merged, seen)
@@ -243,7 +277,7 @@ def main():
     print(f"  {len(transfer_edges)} transfer edges")
 
     print("Building walk graph from OSM …")
-    walk_nodes, walk_edges = build_walk_graph()
+    walk_nodes, walk_edges, _ = build_walk_graph(OSM_FILE)
     print(f"  {len(walk_nodes):,} walk nodes, {len(walk_edges):,} walk edges")
 
     print("Building entrance edges …")
@@ -260,10 +294,12 @@ def main():
     }
     for fname, data in files.items():
         dest = DATA_DIR / fname
-        dest.write_text(json.dumps(data), encoding="utf-8")
-        print(f"  Wrote {fname}  ({dest.stat().st_size / 1_048_576:.1f} MB, {len(data):,} rows)")
+        with open(dest, "w") as f:
+            json.dump(data, f)
+        size_mb = dest.stat().st_size / 1_048_576
+        print(f"  Wrote {fname} ({size_mb:.1f} MB, {len(data):,} rows)")
 
-    print("\nBuild complete →", DATA_DIR)
+    print("\nBuild complete — 6 JSON files in", DATA_DIR)
 
 
 if __name__ == "__main__":

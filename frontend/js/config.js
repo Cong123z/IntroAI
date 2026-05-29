@@ -11,3 +11,4 @@ const LINE_COLORS = {
 const MAP_CENTER = [48.2082, 16.3738];  // Vienna city centre
 const MAP_ZOOM   = 13;
 const WALK_COLOR = '#666666';
+const ROUTE_COLOR = 'rgba(255, 215, 0, 1)';

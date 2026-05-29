@@ -1,6 +1,71 @@
-/* admin.js — scenario CRUD + weather toggle */
+/* admin.js — scenario CRUD + weather toggle + map overlay toggles */
 
 const API_BASE = '';
+
+// ── Map overlay toggles ──────────────────────────────────────────────────────
+// State is stored in localStorage so the user-view page can read it.
+// The user-view page (map.js) checks localStorage on load and on storage events.
+
+function _setOverlayState(key, value) {
+  try { localStorage.setItem(key, value ? '1' : '0'); } catch (_) {}
+}
+function _getOverlayState(key, defaultVal) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? defaultVal : v === '1';
+  } catch (_) { return defaultVal; }
+}
+
+function handleToggleNetwork() {
+  const btn   = document.getElementById('btn-toggle-network');
+  const badge = document.getElementById('network-badge');
+  const isOn  = btn.classList.contains('active');
+  const next  = !isOn;
+
+  btn.classList.toggle('active', next);
+  badge.textContent = next ? 'ON' : 'OFF';
+  badge.className   = 'overlay-badge ' + (next ? 'badge-on' : 'badge-off');
+
+  _setOverlayState('admin_network_visible', next);
+  // Broadcast to other tabs / the user-view iframe
+  window.dispatchEvent(new StorageEvent('storage', {
+    key: 'admin_network_visible', newValue: next ? '1' : '0',
+  }));
+}
+
+function handleToggleWalkBounds() {
+  const btn   = document.getElementById('btn-toggle-walk-bounds');
+  const badge = document.getElementById('walk-bounds-badge');
+  const isOn  = btn.classList.contains('active');
+  const next  = !isOn;
+
+  btn.classList.toggle('active', next);
+  badge.textContent = next ? 'ON' : 'OFF';
+  badge.className   = 'overlay-badge ' + (next ? 'badge-on' : 'badge-off');
+
+  _setOverlayState('admin_walk_bounds_visible', next);
+  window.dispatchEvent(new StorageEvent('storage', {
+    key: 'admin_walk_bounds_visible', newValue: next ? '1' : '0',
+  }));
+}
+
+// Restore toggle states from localStorage on page load
+document.addEventListener('DOMContentLoaded', () => {
+  const netVisible    = _getOverlayState('admin_network_visible', true);
+  const boundsVisible = _getOverlayState('admin_walk_bounds_visible', false);
+
+  const netBtn    = document.getElementById('btn-toggle-network');
+  const netBadge  = document.getElementById('network-badge');
+  netBtn.classList.toggle('active', netVisible);
+  netBadge.textContent = netVisible ? 'ON' : 'OFF';
+  netBadge.className   = 'overlay-badge ' + (netVisible ? 'badge-on' : 'badge-off');
+
+  const wbBtn   = document.getElementById('btn-toggle-walk-bounds');
+  const wbBadge = document.getElementById('walk-bounds-badge');
+  wbBtn.classList.toggle('active', boundsVisible);
+  wbBadge.textContent = boundsVisible ? 'ON' : 'OFF';
+  wbBadge.className   = 'overlay-badge ' + (boundsVisible ? 'badge-on' : 'badge-off');
+});
 
 // ── Scenario management ─────────────────────────────────────────────────────
 

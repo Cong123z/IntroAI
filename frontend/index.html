@@ -3,52 +3,52 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vienna U-Bahn Navigator</title>
+  <title>Bản đồ Vienna</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
 
-<header>
-  <span>🚇</span>
-  <h1>Vienna U-Bahn Navigator</h1>
-  <a href="/admin.html">⚙️ Admin</a>
-</header>
-
 <div class="layout">
-  <!-- Sidebar -->
   <aside class="sidebar">
 
-    <div class="sidebar-section">
-      <h2>Plan Route</h2>
+    <div class="sidebar-brand">
+      <h1>Bản đồ thành phố Vienna</h1>
+    </div>
 
-      <label for="sel-start">Start</label>
-      <select id="sel-start"><option value="">Loading stations…</option></select>
+    <div class="sidebar-section">
+      <h2>Tìm đường</h2>
+
+      <label for="sel-start">Điểm đi</label>
+      <select id="sel-start"><option value="">Đang tải danh sách...</option></select>
       <div class="pick-row">
-        <button id="btn-pick-start" class="btn btn-ghost btn-full">📍 Pick on map</button>
+        <button id="btn-pick-start" class="btn btn-ghost btn-full">Chọn trên bản đồ</button>
       </div>
 
-      <label for="sel-end">Destination</label>
-      <select id="sel-end"><option value="">Loading stations…</option></select>
+      <label for="sel-end">Điểm đến</label>
+      <select id="sel-end"><option value="">Đang tải danh sách...</option></select>
       <div class="pick-row">
-        <button id="btn-pick-end" class="btn btn-ghost btn-full">📍 Pick on map</button>
+        <button id="btn-pick-end" class="btn btn-ghost btn-full">Chọn trên bản đồ</button>
       </div>
 
       <div class="action-row">
-        <button id="btn-find"  class="btn btn-primary btn-full">🔍 Find Route</button>
-        <button id="btn-reset" class="btn btn-secondary">✕ Reset</button>
+        <button id="btn-find" class="btn btn-primary btn-full">Tìm đường</button>
+        <button id="btn-reset" class="btn btn-secondary">Reset</button>
       </div>
     </div>
 
     <div class="sidebar-section">
-      <h2>Itinerary</h2>
+      <h2>Các bước di chuyển</h2>
       <div id="result-banner"></div>
       <ul id="result-steps"></ul>
     </div>
 
+    <div class="sidebar-footer">
+      <a href="/admin.html" class="btn-admin">Công cụ bản đồ</a>
+    </div>
+
   </aside>
 
-  <!-- Map -->
   <div id="map"></div>
 </div>
 

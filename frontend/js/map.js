@@ -3,12 +3,35 @@
 let map;
 let networkLayer;
 let routeLayer;
+let walkBoundsLayer = null;   // bounding box of walk nodes (admin toggle)
+let networkStations = [];
 let startMarker = null;
 let endMarker   = null;
 
+let networkVisible = false;    // subway lines toggle state
+let walkBoundsVisible = false; // walk node bbox toggle state
+
 let pickMode = null;   // 'start' | 'end' | null
 
+const selectedPointIcon = L.divIcon({
+  className: 'selected-point-marker',
+  iconSize: [22, 30],
+  iconAnchor: [11, 30],
+  popupAnchor: [0, -30],
+});
+
+function _readAdminPrefs() {
+  try {
+    const nv = localStorage.getItem('admin_network_visible');
+    const wb = localStorage.getItem('admin_walk_bounds_visible');
+    if (nv !== null) networkVisible     = nv === '1';
+    if (wb !== null) walkBoundsVisible  = wb === '1';
+  } catch (_) {}
+}
+
 function initMap() {
+  _readAdminPrefs();   // apply saved admin overlay prefs before rendering
+
   map = L.map('map').setView(MAP_CENTER, MAP_ZOOM);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -16,6 +39,29 @@ function initMap() {
     maxZoom: 19,
   }).addTo(map);
 
+  // React to admin-panel toggle changes in other tabs
+  window.addEventListener('storage', async (e) => {
+    if (e.key === 'admin_network_visible') {
+      const want = e.newValue === '1';
+      if (want !== networkVisible) toggleNetwork();
+    }
+    if (e.key === 'admin_walk_bounds_visible') {
+      const want = e.newValue === '1';
+      if (want !== walkBoundsVisible) await toggleWalkBounds();
+    }
+  });
+// 1. Base Satellite Layer
+  // L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  //   attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+  //   maxZoom: 19
+  // }).addTo(map);
+
+  // // 2. Transparent Labels Overlay (Optional but recommended)
+  // L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}{r}.png', {
+  //   attribution: 'Map tiles by Stamen Design, CC BY 3.0 &mdash; Map data &copy; OpenStreetMap',
+  //   subdomains: 'abcd',
+  //   maxZoom: 19
+  // }).addTo(map);
   map.on('click', onMapClick);
 
   loadNetwork();
@@ -26,9 +72,11 @@ async function loadNetwork() {
     const res  = await fetch(`${API_BASE}/api/network`);
     const data = await res.json();
 
-    networkLayer = L.layerGroup().addTo(map);
+    networkStations = data.stations;
+    networkLayer = L.layerGroup();
 
-    // Draw segments
+    // Populate dropdowns
+    populateDropdowns(data.stations);
     for (const seg of data.segments) {
       const color = LINE_COLORS[seg.line_id] || '#888';
       L.polyline(
@@ -37,30 +85,79 @@ async function loadNetwork() {
       ).addTo(networkLayer);
     }
 
-    // Draw station markers
-    for (const st of data.stations) {
-      const colors = st.lines.map(l => LINE_COLORS[l] || '#888');
-      const color  = colors[0] || '#888';
-      L.circleMarker([st.lat, st.lng], {
-        radius: 5,
-        color: '#fff',
-        fillColor: color,
-        fillOpacity: 1,
-        weight: 2,
-      })
-        .bindTooltip(st.name, { direction: 'top', offset: [0, -6] })
-        .on('click', function (e) {
-          L.DomEvent.stopPropagation(e);
-          onStationClick(st);
-        })
-        .addTo(networkLayer);
-    }
+    // Add to map only if visible state is on
+    if (networkVisible) networkLayer.addTo(map);
 
-    // Populate dropdowns
-    populateDropdowns(data.stations);
+    // If walk bounds were toggled on before page load, draw them now
+    if (walkBoundsVisible) {
+      walkBoundsVisible = false;   // toggleWalkBounds flips the flag internally
+      await toggleWalkBounds();
+    }
   } catch (err) {
     console.error('Failed to load network:', err);
   }
+}
+
+// ── Admin toggles ────────────────────────────────────────────────────────────
+
+/**
+ * Toggle subway network lines on/off.
+ * Returns the new visibility state.
+ */
+function toggleNetwork() {
+  if (!networkLayer) return networkVisible;
+  networkVisible = !networkVisible;
+  if (networkVisible) {
+    networkLayer.addTo(map);
+  } else {
+    map.removeLayer(networkLayer);
+  }
+  return networkVisible;
+}
+
+/**
+ * Toggle the bounding-box rectangle that covers all walk nodes.
+ * Fetches /api/network/walk-bounds on first call, caches the layer.
+ * Returns a Promise<boolean> with the new visibility state.
+ */
+async function toggleWalkBounds() {
+  walkBoundsVisible = !walkBoundsVisible;
+
+  if (!walkBoundsVisible) {
+    if (walkBoundsLayer) map.removeLayer(walkBoundsLayer);
+    walkBoundsLayer = null;
+    return false;
+  }
+
+  // Fetch bounds from backend
+  try {
+    const res  = await fetch(`${API_BASE}/api/network/walk-bounds`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const { min_lat, max_lat, min_lng, max_lng } = data;
+
+    walkBoundsLayer = L.rectangle(
+      [[min_lat, min_lng], [max_lat, max_lng]],
+      {
+        color:       '#e67e22',
+        weight:      2,
+        opacity:     0.85,
+        fillColor:   '#e67e22',
+        fillOpacity: 0.07,
+        dashArray:   '6 5',
+      }
+    ).bindTooltip(
+      `Walk node bounding box<br>${min_lat.toFixed(4)},${min_lng.toFixed(4)} → ${max_lat.toFixed(4)},${max_lng.toFixed(4)}`,
+      { sticky: true }
+    );
+    walkBoundsLayer.addTo(map);
+  } catch (err) {
+    console.error('Failed to load walk bounds:', err);
+    walkBoundsVisible = false;
+  }
+  return walkBoundsVisible;
 }
 
 function onMapClick(e) {
@@ -79,7 +176,7 @@ function onStationClick(station) {
 function setPoint(which, lat, lng, stationName) {
   if (which === 'start') {
     if (startMarker) map.removeLayer(startMarker);
-    startMarker = L.marker([lat, lng], { title: 'Start' })
+    startMarker = L.marker([lat, lng], { title: 'Start', icon: selectedPointIcon })
       .bindPopup(stationName ? `Start: ${stationName}` : `Start: ${lat.toFixed(5)}, ${lng.toFixed(5)}`)
       .addTo(map);
     window._startPoint = { lat, lng };
@@ -87,7 +184,7 @@ function setPoint(which, lat, lng, stationName) {
     syncDropdown('start', stationName, lat, lng);
   } else {
     if (endMarker) map.removeLayer(endMarker);
-    endMarker = L.marker([lat, lng], { title: 'End' })
+    endMarker = L.marker([lat, lng], { title: 'End', icon: selectedPointIcon })
       .bindPopup(stationName ? `End: ${stationName}` : `End: ${lat.toFixed(5)}, ${lng.toFixed(5)}`)
       .addTo(map);
     window._endPoint = { lat, lng };
@@ -101,31 +198,113 @@ function setPickMode(mode) {
   updatePickButtons(mode);
 }
 
-function drawRoute(steps) {
+function drawRoute(steps, coords) {
   if (routeLayer) map.removeLayer(routeLayer);
   routeLayer = L.layerGroup().addTo(map);
 
-  const bounds = [];
+  if (!coords || coords.length < 2) return;
 
-  for (const step of steps) {
-    if (!step.polyline || step.polyline.length < 2) continue;
+  const bounds = [...coords];
+  const visitedStations = findVisitedStations(steps, coords);
 
-    bounds.push(...step.polyline);
-
-    if (step.kind === 'ride') {
-      const color = LINE_COLORS[step.line_id] || '#999';
-      L.polyline(step.polyline, { color, weight: 6, opacity: 0.9 }).addTo(routeLayer);
-    } else if (step.kind === 'walk') {
-      L.polyline(step.polyline, {
-        color: WALK_COLOR, weight: 4, opacity: 0.7, dashArray: '6 8',
-      }).addTo(routeLayer);
-    } else {
-      L.polyline(step.polyline, { color: '#aaa', weight: 3, opacity: 0.5 }).addTo(routeLayer);
+  const hasStepGeometry = steps.some(step => step.coords && step.coords.length >= 2);
+  if (hasStepGeometry) {
+    for (const step of steps) {
+      drawRouteStep(step);
     }
+  } else {
+    L.polyline(coords, {
+      color: ROUTE_COLOR, weight: 6, opacity: 0.9,
+      lineCap: 'round', lineJoin: 'round',
+    }).addTo(routeLayer);
   }
+
+  drawVisitedStations(visitedStations);
 
   if (bounds.length) {
     map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] });
+  }
+}
+
+function drawRouteStep(step) {
+  const stepCoords = step.coords || [];
+  if (stepCoords.length < 2) return;
+
+  if (step.kind === 'ride') {
+    L.polyline(stepCoords, {
+      color: LINE_COLORS[step.line_id] || ROUTE_COLOR,
+      weight: 7, opacity: 1,
+      lineCap: 'round', lineJoin: 'round',
+    }).addTo(routeLayer);
+    return;
+  }
+
+  if (step.kind === 'walk' || step.kind === 'enter' || step.kind === 'exit') {
+    L.polyline(stepCoords, {
+      color: WALK_COLOR, weight: 6, opacity: 1,
+      dashArray: '6 8', lineCap: 'round',
+    }).addTo(routeLayer);
+    return;
+  }
+
+  if (step.kind === 'transfer') {
+    L.polyline(stepCoords, {
+      color: WALK_COLOR, weight: 4, opacity: 0.85,
+      dashArray: '2 8', lineCap: 'round',
+    }).addTo(routeLayer);
+  }
+}
+
+function findVisitedStations(steps, coords) {
+  const visited = new Map();
+
+  const rideSteps = steps.filter(s => s.kind === 'ride');
+  if (rideSteps.length === 0) return [];
+
+  for (const step of rideSteps) {
+    const lineId = step.line_id;
+    if (!lineId) continue;
+    const candidates = step.coords && step.coords.length ? step.coords : coords;
+    for (const point of candidates) {
+      const station = findStationAt(point, lineId);
+      if (!station) continue;
+      const key = `${station.name}|${station.lat.toFixed(6)}|${station.lng.toFixed(6)}`;
+      if (!visited.has(key)) {
+        visited.set(key, { ...station, routeLineId: lineId });
+      }
+    }
+  }
+
+  return [...visited.values()];
+}
+
+function findStationAt(point, lineId) {
+  const [lat, lng] = point;
+  const closeStations = networkStations
+    .filter(st => !lineId || st.lines.includes(lineId))
+    .map(st => ({
+      station: st,
+      distance: map.distance([lat, lng], [st.lat, st.lng]),
+    }))
+    .filter(match => match.distance <= 45)
+    .sort((a, b) => a.distance - b.distance);
+
+  return closeStations[0]?.station || null;
+}
+
+function drawVisitedStations(stations) {
+  for (const st of stations) {
+    const color = LINE_COLORS[st.routeLineId] || LINE_COLORS[st.lines[0]] || '#888';
+    L.circleMarker([st.lat, st.lng], {
+      radius: 6,
+      color: '#fff',
+      fillColor: color,
+      fillOpacity: 1,
+      weight: 3,
+      pane: 'markerPane',
+    })
+      .bindTooltip(st.name, { direction: 'top', offset: [0, -8] })
+      .addTo(routeLayer);
   }
 }
 
