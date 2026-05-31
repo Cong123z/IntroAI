@@ -38,15 +38,12 @@ python scripts/build_graph.py
 uvicorn backend.app.main:app --reload --port 8000
 ```
 INFO:     Application startup complete.
+Then open your browser and go to:
 ```
 
-Then open your browser and go to:
+- http://localhost:8000 — the main app (plan your route here)
+- http://localhost:8000/admin.html — function panel (simulate disruptions)
 
-- **http://localhost:8000** — the main app (plan your route here)
-- **http://localhost:8000/admin.html** — function panel (simulate disruptions)
-
-
----
 ```
 
 ## How to use the main app
@@ -73,8 +70,10 @@ The function panel lets you control the simulation by adding network closures, c
 
 **Map Display Settings:**
 This section allows you to customize which components are visible on the map.
-1.Subway Lines: Toggle this to show or hide the subway lines on the map.
-2.Map Limits: Toggle this to show or hide the map boundaries.
+
+1. Subway Lines: Toggle this to show or hide the subway lines on the map.
+
+2. Map Limits: Toggle this to show or hide the map boundaries.
 
 Click the map link at the bottom of the panel to see your changes applied in real-time.
 
@@ -87,13 +86,16 @@ Now go back to the main app and search for a route — it will automatically avo
 whatever you closed.
 
 **Change the weather:**
-Click ☀️ Clear, 🌧️ Rain, or ❄️ Snow. This changes how fast the app assumes
-you walk. Snow makes walking slower so routes with lots of walking will take longer.
+Click ☀️ Clear, 🌧️ Rain, or ❄️ Snow. This changes how fast the app assumes you walk.
+
 ☀️ Clear - 1.4 m/s 
+
 🌧️ Rain  - 1.1 m/s 
+
 ❄️ Snow  - 0.8 m/s 
 
 **To remove a closure:** click the ✕ next to it in the list.
+
 **To remove all closures at once:** click **Clear All**.
 
 ---
