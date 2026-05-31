@@ -8,11 +8,13 @@ which train to take, and where to transfer.
 
 Open a terminal, go to the project folder, then run these three commands:
 
+```
 python -m venv .venv
 
 .venv\Scripts\activate
 
 pip install -r requirements.txt
+```
 
 *(Downloads all the libraries the project needs — only needed once)*
 
