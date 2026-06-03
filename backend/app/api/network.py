@@ -49,6 +49,8 @@ def get_network():
             "to_lng":       tp["lng"],
             "from_station": fp["station_name"],
             "to_station":   tp["station_name"],
+            "from_platform": e["from_platform"],
+            "to_platform":   e["to_platform"],
         })
 
     return {"stations": list(stations_map.values()), "segments": segments}

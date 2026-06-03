@@ -6,6 +6,7 @@ ClosureMask (from pathfinding.py) tracks blocked items and the current walk spee
 from __future__ import annotations
 
 import itertools
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 
@@ -50,6 +51,23 @@ class ScenarioService:
         return list(self._store.values())
 
     def create_scenario(self, s_type: str, payload: dict) -> Scenario:
+        # FIX 3: validate and coerce segment platform IDs at write time so that
+        # null/NaN values from a malformed request never enter the store.
+        if s_type == "segment":
+            fp = payload.get("from_platform")
+            tp = payload.get("to_platform")
+            if fp is None or tp is None:
+                raise ValueError(
+                    "Segment scenario requires both from_platform and to_platform"
+                )
+            try:
+                payload = {**payload, "from_platform": int(fp), "to_platform": int(tp)}
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"from_platform and to_platform must be integers, "
+                    f"got {fp!r} and {tp!r}"
+                )
+
         sid = next(_counter)
         s = Scenario(id=sid, type=s_type, payload=payload)
         self._store[sid] = s
@@ -99,10 +117,25 @@ class ScenarioService:
             elif s.type == "segment":
                 fp = s.payload.get("from_platform")
                 tp = s.payload.get("to_platform")
-                if fp is not None and tp is not None:
+                # FIX 4: warn and skip rather than silently discard, so stale
+                # bad data (e.g. migrated from an older store) is observable.
+                if fp is None or tp is None:
+                    warnings.warn(
+                        f"Scenario {s.id}: segment payload missing platform IDs "
+                        f"(from_platform={fp!r}, to_platform={tp!r}), skipping",
+                        stacklevel=2,
+                    )
+                    continue
+                try:
                     blocked_segments.add((int(fp), int(tp)))
+                except (TypeError, ValueError):
+                    warnings.warn(
+                        f"Scenario {s.id}: non-integer platform IDs "
+                        f"{fp!r}/{tp!r}, skipping",
+                        stacklevel=2,
+                    )
 
-        # Đóng gói toàn bộ thông tin chặn đường và tốc độ đi bộ động mới 
+        # Đóng gói toàn bộ thông tin chặn đường và tốc độ đi bộ động mới
         # rồi chuyền thẳng qua cấu trúc dữ liệu của file pathfinding
         self._mask = ClosureMask(
             blocked_stations=frozenset(blocked_stations),

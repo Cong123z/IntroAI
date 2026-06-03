@@ -23,7 +23,12 @@ def create_scenario(
     body: ScenarioCreate,
     service: ScenarioService = Depends(get_scenario_service),
 ):
-    s = service.create_scenario(body.type, body.payload)
+    # FIX 3 (router side): surface ScenarioService validation errors as 422
+    # so the client receives a clear message instead of a 500.
+    try:
+        s = service.create_scenario(body.type, body.payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return ScenarioResponse(id=s.id, type=s.type, payload=s.payload)
 
 
